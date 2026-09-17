@@ -1,0 +1,23 @@
+{
+  "name": "cloudflare-deploy-mcp",
+  "main": "src/worker.js",
+  "compatibility_date": "2026-09-17",
+
+  // Replace example.com throughout with a domain on your Cloudflare account.
+  // One wildcard route covers both the published pages and the MCP endpoint.
+  "vars": {
+    "PAGES_DOMAIN": "share.example.com",
+    "MCP_SUBDOMAIN": "deploy"
+  },
+  "routes": [
+    { "pattern": "*.share.example.com/*", "zone_name": "example.com" }
+  ],
+  "kv_namespaces": [
+    { "binding": "PAGES", "id": "REPLACE_WITH_KV_NAMESPACE_ID" }
+  ]
+
+  // Secrets are set with `wrangler secret put`, never in this file:
+  //   CLOUDFLARE_API_TOKEN   Account scope: Access: Apps and Policies: Edit
+  //   CLOUDFLARE_ACCOUNT_ID
+  //   MCP_SHARED_SECRET      also set as the portal's upstream bearer token
+}

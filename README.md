@@ -41,4 +41,10 @@ Full setup, flags and gotchas: [SKILL.md](plugins/cloudflare-deploy/skills/cloud
 > **Claude / Cowork note:** the sandbox is destroyed at the end of every session,
 > so there is nowhere to keep that token — it would have to be pasted into the
 > conversation each time. If that is your situation, use the connector instead
-> (see `mcp/`), which keeps the credential server-side.
+> [mcp/cloudflare-deploy](mcp/cloudflare-deploy), which keeps the credential server-side.
+
+## Connector
+
+[mcp/cloudflare-deploy](mcp/cloudflare-deploy) is the same capability as a remote
+MCP server, for people who should never handle a Cloudflare token — the credential
+stays in the Worker and users sign in through Cloudflare Access.

@@ -1,6 +1,9 @@
-// MCP server + page host. One Worker does both:
-//   <project>.<PAGES_DOMAIN>  serves a page out of KV
-//   the MCP endpoint          publishes one and locks it behind Cloudflare Access
+// MCP server + page host. One Worker, one hostname, no DNS:
+//   POST /mcp          publishes a page and locks it behind Cloudflare Access
+//   GET  /p/<project>  serves that page out of KV
+//
+// Each project gets its own path-scoped Access application, so two pages on the
+// same Worker can have completely different guest lists.
 //
 // The Cloudflare credential lives here as a Worker secret and never reaches the
 // person asking for the deploy.
@@ -17,6 +20,9 @@ const CSP =
   "form-action 'none'; base-uri 'none'; frame-ancestors 'none'";
 
 class ToolError extends Error {}
+
+const pagePath = (project) => `/p/${project}`;
+const pageUrl = (env, project) => `https://${env.PUBLIC_HOST}${pagePath(project)}`;
 
 async function cf(env, method, path, body) {
   const res = await fetch(API + path, {
@@ -51,7 +57,7 @@ async function deployPrivatePage(env, { project, html, emails, email_domain, ses
   if (!html || !html.trim()) throw new ToolError("html is empty — nothing to publish");
 
   const account = env.CLOUDFLARE_ACCOUNT_ID;
-  const host = `${project}.${env.PAGES_DOMAIN}`;
+  const destination = `${env.PUBLIC_HOST}${pagePath(project)}`;
   const sessionDuration = session || "24h";
   const include = accessRules({ emails, emailDomain: email_domain });
   const who = email_domain ? `anyone @${email_domain.replace(/^@/, "")}` : emails.join(", ");
@@ -67,41 +73,41 @@ async function deployPrivatePage(env, { project, html, emails, email_domain, ses
   const appBody = {
     name: project,
     type: "self_hosted",
-    destinations: [{ type: "public", uri: host }],
+    destinations: [{ type: "public", uri: destination }],
     session_duration: sessionDuration,
     app_launcher_visible: false,
     auto_redirect_to_identity: false,
     policies: [{ id: policyId, precedence: 1 }],
   };
   const apps = await cf(env, "GET", `/accounts/${account}/access/apps?per_page=200`);
-  const app = apps.find((a) => (a.destinations || []).some((d) => d.uri === host));
+  const app = apps.find((a) => (a.destinations || []).some((d) => d.uri === destination));
   if (app) await cf(env, "PUT", `/accounts/${account}/access/apps/${app.id}`, appBody);
   else await cf(env, "POST", `/accounts/${account}/access/apps`, appBody);
 
   await env.PAGES.put(`page:${project}`, html);
 
-  // Anonymous fetch is the real proof, but a Worker calling a hostname it serves
-  // itself is a subrequest loop on some routes. Fall back to asserting the lock
-  // exists rather than reporting a success nobody checked.
+  // Anonymous fetch is the real proof, but a Worker calling a path it serves
+  // itself may not leave the edge. Fall back to asserting the lock exists rather
+  // than reporting a success nobody checked.
   let verdict;
   try {
-    const res = await fetch(`https://${host}/`, { redirect: "follow" });
+    const res = await fetch(pageUrl(env, project), { redirect: "follow" });
     const landed = res.url ? new URL(res.url).hostname : "";
     if (!landed) throw new ToolError("the self-request returned no final URL");
     verdict = landed.endsWith("cloudflareaccess.com")
       ? "PROTECTED — an anonymous request lands on the Cloudflare Access login."
-      : `UNVERIFIED — an anonymous request ended at ${res.url} instead of the login screen. Check the Access application for ${host} before sharing this link.`;
+      : `UNVERIFIED — an anonymous request ended at ${res.url} instead of the login screen. Check the Access application for ${destination} before sharing this link.`;
   } catch {
     const check = await cf(env, "GET", `/accounts/${account}/access/apps?per_page=200`);
-    verdict = check.some((a) => (a.destinations || []).some((d) => d.uri === host))
-      ? "PROTECTED (indirect) — the Access application covering this hostname is in place; the self-request could not be made from inside the Worker."
-      : `UNVERIFIED — no Access application covers ${host}. Do not share this link.`;
+    verdict = check.some((a) => (a.destinations || []).some((d) => d.uri === destination))
+      ? "PROTECTED (indirect) — the Access application covering this path is in place; the self-request could not be made from inside the Worker."
+      : `UNVERIFIED — no Access application covers ${destination}. Do not share this link.`;
   }
 
   return [
     verdict,
     ``,
-    `  address   https://${host}`,
+    `  address   ${pageUrl(env, project)}`,
     `  allowed   ${who}`,
     `  session   ${sessionDuration}`,
     `  size      ${new TextEncoder().encode(html).length} bytes`,
@@ -115,14 +121,14 @@ const TOOLS = [
   {
     name: "deploy_private_page",
     description:
-      "Publish a single self-contained HTML page at <project>.<domain> behind a Cloudflare Access email login, so only the addresses you name can open it. The lock is created before the content is stored, and the result states whether an anonymous request actually lands on the login screen. Re-run with the same project to publish an update or change the guest list.",
+      "Publish a single self-contained HTML page behind a Cloudflare Access email login, so only the addresses you name can open it. The lock is created before the content is stored, and the result states whether an anonymous request actually lands on the login screen. Re-run with the same project to publish an update or change the guest list.",
     inputSchema: {
       type: "object",
       properties: {
         project: {
           type: "string",
           description:
-            "Becomes the public hostname, so it is guessable and must not advertise the contents: 'tm-tool-2026', never 'exec-salaries'. Lowercase letters, digits and hyphens.",
+            "Becomes the public URL, so it is guessable and must not advertise the contents: 'tm-tool-2026', never 'exec-salaries'. Lowercase letters, digits and hyphens.",
         },
         html: { type: "string", description: "The complete HTML document to publish." },
         emails: {
@@ -175,15 +181,14 @@ async function handleRpc(env, msg) {
 }
 
 function missingConfig(env) {
-  return ["CLOUDFLARE_API_TOKEN", "CLOUDFLARE_ACCOUNT_ID", "PAGES_DOMAIN", "MCP_SHARED_SECRET"].filter((k) => !env[k]);
+  return ["CLOUDFLARE_API_TOKEN", "CLOUDFLARE_ACCOUNT_ID", "PUBLIC_HOST", "MCP_SHARED_SECRET"].filter((k) => !env[k]);
 }
 
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
-    const isMcpHost = url.hostname === `${env.MCP_SUBDOMAIN || "deploy"}.${env.PAGES_DOMAIN}`;
 
-    if (isMcpHost) {
+    if (url.pathname === "/mcp") {
       if (request.method !== "POST") return new Response("MCP endpoint — POST JSON-RPC here", { status: 405 });
 
       // The portal in front does the user authentication; this only proves the
@@ -212,12 +217,10 @@ export default {
       }
     }
 
-    const project = url.hostname.endsWith(`.${env.PAGES_DOMAIN}`)
-      ? url.hostname.slice(0, -(env.PAGES_DOMAIN.length + 1))
-      : null;
-    if (!project) return new Response("not found", { status: 404 });
+    const match = url.pathname.match(/^\/p\/([a-z0-9-]+)\/?$/);
+    if (!match) return new Response("not found", { status: 404 });
 
-    const html = await env.PAGES.get(`page:${project}`);
+    const html = await env.PAGES.get(`page:${match[1]}`);
     if (html === null) return new Response("not found", { status: 404 });
 
     return new Response(html, {

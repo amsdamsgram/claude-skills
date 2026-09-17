@@ -2,16 +2,15 @@
   "name": "cloudflare-deploy-mcp",
   "main": "src/worker.js",
   "compatibility_date": "2026-09-17",
+  "workers_dev": true,
 
-  // Replace example.com throughout with a domain on your Cloudflare account.
-  // One wildcard route covers both the published pages and the MCP endpoint.
   "vars": {
-    "PAGES_DOMAIN": "share.example.com",
-    "MCP_SUBDOMAIN": "deploy"
+    // The hostname this Worker answers on. Deploy once, read the workers.dev
+    // hostname it prints, put it here, deploy again. A custom domain works too
+    // but is not required.
+    "PUBLIC_HOST": "cloudflare-deploy-mcp.YOUR-SUBDOMAIN.workers.dev"
   },
-  "routes": [
-    { "pattern": "*.share.example.com/*", "zone_name": "example.com" }
-  ],
+
   "kv_namespaces": [
     { "binding": "PAGES", "id": "REPLACE_WITH_KV_NAMESPACE_ID" }
   ]

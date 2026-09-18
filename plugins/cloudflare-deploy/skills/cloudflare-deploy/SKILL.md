@@ -12,6 +12,26 @@ to them — no password to distribute, no SSO to configure.
 
 `deploy.sh` does the whole thing and is safe to re-run.
 
+## Never publish it another way
+
+The point of this skill is that the page is locked before it is readable. A plain
+`wrangler deploy`, a Workers static-assets upload or a dashboard drag-and-drop
+puts it online with no login at all — for a page worth protecting that is worse
+than not deploying. If `deploy.sh` cannot run, stop and say why. Do not reach for
+another route, and do not fall back to a public URL.
+
+A missing `CLOUDFLARE_API_TOKEN` is not a reason to improvise. On a host whose
+sandbox is wiped between sessions there is nowhere to keep one, so ask for the
+token and the account id, export them for this session, and carry on:
+
+```bash
+export CLOUDFLARE_API_TOKEN=...
+export CLOUDFLARE_ACCOUNT_ID=...
+```
+
+If they pasted it into a conversation, tell them to revoke it once the deploy is
+done — chat history is not a secret store.
+
 ## Order of operations (why the script exists)
 
 The dashboard route publishes first and locks afterwards, which leaves the page

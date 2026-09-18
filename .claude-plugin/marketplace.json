@@ -2,13 +2,17 @@
   "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
   "name": "amsdamsgram-claude-skills",
   "description": "Claude skills by amsdamsgram",
-  "owner": { "name": "amsdamsgram" },
+  "owner": {
+    "name": "amsdamsgram"
+  },
   "plugins": [
     {
       "name": "cloudflare-deploy",
       "description": "Publish a static site to Cloudflare Pages behind a Cloudflare Access email login",
-      "version": "1.0.0",
-      "author": { "name": "amsdamsgram" },
+      "version": "1.1.0",
+      "author": {
+        "name": "amsdamsgram"
+      },
       "source": "./plugins/cloudflare-deploy",
       "category": "development"
     }

@@ -48,3 +48,10 @@ Full setup, flags and gotchas: [SKILL.md](plugins/cloudflare-deploy/skills/cloud
 [mcp/cloudflare-deploy](mcp/cloudflare-deploy) is the same capability as a remote
 MCP server, for people who should never handle a Cloudflare token — the credential
 stays in the Worker and users sign in through Cloudflare Access.
+
+## Desktop extension
+
+[extension/](extension) packages the same capability as a local MCP server for
+Claude Desktop (Team and Enterprise plans). The Cloudflare token goes in your OS
+keychain instead of a conversation, each person supplies their own, and because
+the server reads files from disk there is no size limit on what you publish.

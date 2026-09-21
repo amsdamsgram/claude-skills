@@ -157,7 +157,9 @@ Re-running is the way to do everything else:
 
 - **Publish an update** — same command, same project. The lock is left alone.
 - **Change who is allowed** — same command with a different `--emails`. The
-  existing policy is updated in place, not duplicated.
+  existing policy is updated in place, not duplicated. Add `--skip-upload` to
+  change the guest list alone, leaving the published content untouched; `--dir`
+  is not needed then.
 
 Removing someone takes effect when their session expires. To cut access
 immediately, re-run with them removed *and* a short `--session`, then restore it.

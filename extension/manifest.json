@@ -1,0 +1,35 @@
+{
+  "manifest_version": "0.3",
+  "name": "cloudflare-deploy",
+  "display_name": "Cloudflare private pages",
+  "version": "1.0.0",
+  "description": "Publish a page to Cloudflare Pages behind a Cloudflare Access email login, and change who is allowed in — without ever putting the API token in a conversation.",
+  "author": { "name": "amsdamsgram" },
+  "server": {
+    "type": "node",
+    "entry_point": "server/index.js",
+    "mcp_config": {
+      "command": "node",
+      "args": ["${__dirname}/server/index.js"],
+      "env": {
+        "CLOUDFLARE_API_TOKEN": "${user_config.cloudflare_api_token}",
+        "CLOUDFLARE_ACCOUNT_ID": "${user_config.cloudflare_account_id}"
+      }
+    }
+  },
+  "user_config": {
+    "cloudflare_api_token": {
+      "type": "string",
+      "title": "Cloudflare API token",
+      "description": "Account-scoped custom token with exactly two permissions: Cloudflare Pages -> Edit, and Access: Apps and Policies -> Edit. Under Account Resources, pin it to the single account you publish into. Stored in your OS keychain, never sent to Claude.",
+      "sensitive": true,
+      "required": true
+    },
+    "cloudflare_account_id": {
+      "type": "string",
+      "title": "Cloudflare account ID",
+      "description": "Found in the Cloudflare dashboard sidebar. Supplying it lets the token drop the Account Settings: Read permission entirely.",
+      "required": true
+    }
+  }
+}

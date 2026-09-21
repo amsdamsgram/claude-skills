@@ -5,13 +5,16 @@
 set -euo pipefail
 
 API="https://api.cloudflare.com/client/v4"
-DIR="" PROJECT="" EMAILS="" EMAIL_DOMAIN="" SESSION="24h" BRANCH="main"
+DIR="" PROJECT="" EMAILS="" EMAIL_DOMAIN="" SESSION="24h" BRANCH="main" SKIP_UPLOAD=0
 
 usage() {
   cat >&2 <<'USAGE'
 usage: deploy.sh --dir <folder|page.html> --project <name>
                  (--emails a@x.com,b@x.com | --email-domain x.com)
-                 [--session 24h] [--branch main]
+                 [--session 24h] [--branch main] [--skip-upload]
+
+--skip-upload changes who is allowed in without republishing the content, for
+when the guest list is the only thing that moved. --dir is not needed then.
 
 env: CLOUDFLARE_API_TOKEN   (required)
      CLOUDFLARE_ACCOUNT_ID  (required only if the token sees several accounts)
@@ -31,12 +34,14 @@ while [ $# -gt 0 ]; do
     --email-domain) EMAIL_DOMAIN="$2"; shift 2 ;;
     --session)      SESSION="$2"; shift 2 ;;
     --branch)       BRANCH="$2"; shift 2 ;;
+    --skip-upload)  SKIP_UPLOAD=1; shift ;;
     -h|--help)      usage ;;
     *) echo "unknown argument: $1" >&2; usage ;;
   esac
 done
 
-[ -n "$DIR" ] && [ -n "$PROJECT" ] || usage
+[ -n "$PROJECT" ] || usage
+[ -n "$DIR" ] || [ "$SKIP_UPLOAD" -eq 1 ] || usage
 [ -n "$EMAILS" ] || [ -n "$EMAIL_DOMAIN" ] || { echo "need --emails or --email-domain" >&2; usage; }
 # A lone .html file is staged into a folder as index.html — the everyday case of
 # "put this one page online". Nothing else from its directory comes along.
@@ -44,7 +49,7 @@ STAGED=""
 cleanup() { if [ -n "$STAGED" ]; then rm -rf "$STAGED"; fi; }
 trap cleanup EXIT
 
-if [ -f "$DIR" ]; then
+if [ "$SKIP_UPLOAD" -eq 0 ] && [ -f "$DIR" ]; then
   case "$DIR" in
     *.html|*.htm) ;;
     *) echo "--dir takes a folder, or a single .html file — got: $DIR" >&2; exit 2 ;;
@@ -55,8 +60,10 @@ if [ -f "$DIR" ]; then
   DIR="$STAGED"
 fi
 
-[ -d "$DIR" ] || { echo "not a folder or .html file: $DIR" >&2; exit 2; }
-[ -f "$DIR/index.html" ] || { echo "no index.html in $DIR — Pages needs one to serve" >&2; exit 2; }
+if [ "$SKIP_UPLOAD" -eq 0 ]; then
+  [ -d "$DIR" ] || { echo "not a folder or .html file: $DIR" >&2; exit 2; }
+  [ -f "$DIR/index.html" ] || { echo "no index.html in $DIR — Pages needs one to serve" >&2; exit 2; }
+fi
 
 # Pages project names: lowercase letters, digits and hyphens.
 case "$PROJECT" in
@@ -198,9 +205,13 @@ else
 fi
 
 # ------------------------------------------------- 5. now the content
-say "5/5  Uploading $DIR"
-npx -y wrangler@latest pages deploy "$DIR" \
-  --project-name "$PROJECT" --branch "$BRANCH" --commit-dirty true
+if [ "$SKIP_UPLOAD" -eq 1 ]; then
+  say "5/5  Content left alone (--skip-upload)"
+else
+  say "5/5  Uploading $DIR"
+  npx -y wrangler@latest pages deploy "$DIR" \
+    --project-name "$PROJECT" --branch "$BRANCH" --commit-dirty true
+fi
 
 # ------------------------------------------------- verify the door is shut
 say "Verifying"

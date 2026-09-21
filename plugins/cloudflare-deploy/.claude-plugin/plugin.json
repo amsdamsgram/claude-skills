@@ -1,7 +1,7 @@
 {
   "name": "cloudflare-deploy",
   "description": "Publish a static site to Cloudflare Pages behind a Cloudflare Access email login",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "author": {
     "name": "amsdamsgram"
   }
